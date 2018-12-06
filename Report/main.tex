@@ -1,0 +1,224 @@
+\documentclass[a4paper]{article}
+\usepackage{listings} 
+\usepackage{fancyhdr} % Required to make the custom header and footer
+\usepackage{lastpage} % Required to determine the last page for the footer
+
+%%%%%%%%%% MODIFY THE FOLLOWING WITH YOUR INFORMATION %%%%%%%%%%
+
+%Names of students (If only one, put a '~' as the second student's name)
+\newcommand{\firstStudent}{Pennati Lucas}
+\newcommand{\secondStudent}{~}
+
+%Subjec's name
+\newcommand{\subjectName}{Information Retrieval}
+%Current semester (Fall/Spring + Year)
+\newcommand{\semester}{Fall 2018}
+%Date (put '\today' for current date). Use the format 'Month as a word' 'day as a number', 'Year as a number', i.e. September 1, 2014
+\newcommand{\theDate}{\today}
+%Title of the document (i.e. Assignment 1)
+\title{\huge Course Project}
+%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%% YOUR PACKAGES %%%%%%%%%%%%%%%%%%%
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{tikz}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{todonotes}
+\usepackage{fancyvrb}
+\usepackage{moreverb}
+\usepackage{float}
+ \usepackage{url}
+%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+%\usepackage{showframe}
+
+%---------------------- Custom Commands ----------------------
+\usepackage[cache=false]{minted}
+
+\usepackage[T1]{fontenc}
+\usepackage[scaled=0.80]{beramono}
+\usemintedstyle{xcode}
+
+\newmintedfile[javacode]{java}{
+linenos,
+tabsize=4,
+frame=lines,
+breaklines=true,
+xleftmargin=20pt
+}
+
+\newminted[code]{java}{
+linenos,
+frame=lines,
+tabsize=4,
+breaklines=true,
+xleftmargin=20pt
+}
+
+\newmintinline[java]{java}{
+linenos,
+frame=lines,
+breaklines=true,
+xleftmargin=20pt
+}
+
+%---------------------- Layout Setup ----------------------
+%Names
+\fancyhead[L]{\firstStudent\\\secondStudent}
+%Subject name
+\fancyhead[C]{\subjectName\\\semester}
+%Date (Leave as is for today's date)
+\fancyhead[R]{\theDate\\USI Lugano}
+% Footer
+\fancyfoot[C]{Page\ \thepage\ of\ \pageref{LastPage}}
+%Height of the line separating Header and main content
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\footrulewidth}{0.5pt}
+%Hide the date from the maketitle command
+\date{}
+%Custom margins
+\usepackage[margin=35mm]{geometry}
+
+\newcommand{\tool}{MovieSearch}
+
+
+\pagestyle{fancy}
+\makeatletter
+\let\ps@plain\ps@fancy 
+\makeatother
+
+\begin{document}
+
+
+
+
+\maketitle
+\vspace{-10mm}
+
+\section{Introduction}
+The following document aims to illustrate and explain some of the details of \tool, my tool. In the next sections, I explain some of the design choices, websites crawled, as well as some architectural choices. 
+
+To get a better overview of how to run the tool, please read the \texttt{README} embedded in the project folder. 
+
+Before you go any further, if not yet done, it is recommended to download the repository at \url{https://github.com/pennal/\tool}
+\section{Components}
+\subsection{Crawling}
+The first step was to obtain the information required for the tool. To do so, I used Apache Nutch. The configuration was left quite standard, only for a few additions that are explained in the next sections. In general, the number of rounds was left at 20 or 30, which I found to be a rather acceptable parameter. This allowed me to gather enough information to have a working tool. 
+
+Crawling was done independently for each of the websites. This was done to parallelize the work, and therefore speed up the process. Also, this allows me to keep an eye on exactly what comes from where, and have a better overview on the size of the crawling process.
+
+Once done, the segments for each of the websites were taken and dumped to an html file. This made it easy to extract the information needed from each of the websites. This is better explained in the next section. 
+\subsubsection{IMDB}
+The structure of the website is quite simple, and easy to crawl. The only issue I encountered were the external links that are embedded in almost every page through the use of widgets. To avoid this situation I modified the regex to only include those pages which pointed to an actual movie. The following RegExes were used:
+\begin{verbatim}
+-(.*(?:sort).*)
+-(.*(?:view).*)
++(^(?:http|https)\:\/\/(?:www\.)?imdb.com\/title\/(?:tt\d*)\/(?:(?![\w\d])|connections))
++((?<![\w\d])^(?:http|https)\:\/\/(?:www\.)?imdb.com\/(?![\w\d]))
++(^(?:http|https)\:\/\/(?:www\.)?imdb.com\/search\/title(?![\w\d]))
+-.	
+\end{verbatim}
+
+\subsubsection{AllMovie}
+This is another website which is easy to crawl. To do so minimal modification was required to the basic regexes. The only issue is with the URLs, which always contain the \texttt{/movie} word in their URLs. Therefore it was impossible to distinguish the movies form the TV Shows. This cleaning was done later on in the cleaning phase. The following RegExes were used:
+\begin{verbatim}
++(^(?:http(?:s?))\:\/\/(?:w{3}\.)?allmovie\.com\/(?:genre|movie)\/)
+
+# Refuse anything else
+-.
+\end{verbatim}
+
+\subsubsection{RottenTomatoes}
+Due to the structure of Rotten Tomatoes, it was unfortunately impossible to parse over 500 documents. Therefore they were left out as they almost did not contribute to the final dataset.
+
+\subsection{Filtering}
+Instead of relying on Nutch to do the heavy lifting, I decided to write an external program that would ingest the content, filter it and extract the required content. To do so, I take the plain text dumps from the crawling phase, parse them, and then depending on the website that the content belongs to, extract the information using an HTML parser.
+
+To do so, I implemented a strategy pattern, where each website must implement an interface that I declared. This interface contains methods that are common to all, such as one for getting the title, getting the content, etc. and delegates the actual implementation to another class, hiding the implementation from the user of the system. 
+
+Once such filtering is done, I aggregate the movies coming from different sources. To do so, I take the title of each movie, apply stopword removal and tokenization, and look for a match. If a match is found, then the details are merged together and a unique movie is left.
+
+Once such filtering is performed, the data is dumped into a unique JSON, which contains all valid movies crawled by Nutch and filtered by my utility. For each of the movies, the following fields are present:
+\begin{itemize}
+\item Title
+\item Description
+\item Image URL
+\item Genres
+\item Release Date
+\item Description
+\item Link and rating from IMDB
+\item Link and rating from AllMovie
+
+\end{itemize}
+These fields are then sent to Solr, which takes care of indexing the data, and storing it. This is done using the \texttt{post} command provided by Solr (for more details, see the \texttt{README}).
+\subsection{Solr}
+To index and serve the content, I used Apache Solr. After the filtering phase, the data is sent to Solr which is used as a simple web server which server the content based on the user query. To send the data to Solr, I used the data obtained from the filtering phase which was cleaned and included all the data I needed. 
+
+\subsection{Frontend}
+In order to present the results to the user, I created a very simple webpage with a single field on it. Once the user has inserted the query, the data is sent over so Solr which returns the documents related to the search. The results are then shown to the user in two different views, a simple table and a set of cards.
+
+The design of the page was left quite simplistic on purpose. In the end, I decided to use what Bootstrap calls ``cards'' which are essentially containers. 
+
+To implement the frontend, I used Vue.js with axios to make the requests. Other than that, I used the Bootstrap framework to make the website as responsive as possible.
+
+\section{Querying}
+As previously explained, I used Solr to host all of the information. Luckily there is a build in query engine that allows us to obtain the information even if stored in custom fields. Therefore, I used the normal query URL, simply plugging in the information required by the user. To filter the results coming from Solr, I used the \texttt{fq} field acting on the title. Being as most people search for the title, this seemed like the correct approach. The resulting URL, for the query "Mission Impossible" is as follows:
+
+\begin{verbatim}
+http://localhost:8983/solr/nutch/select?fq=title:impossible&fq=title:mission&q=*:*	
+\end{verbatim}
+Solr will then return a payload as JSON, which can be easily traversed and the required information extracted. 
+
+\section{Running the tool}
+In order to repeat the entire process, please check the \texttt{README} file.
+
+\section{Evaluation}
+In order to evaluate the tool, I asked a few classmates to look for movies that were both recent and not. No further instructions were given, in order to see how user friendly the tool is. All that was asked was to talk during the evaluation, and to narrate any doubt or questions. 
+
+The results are summarized in table \ref{tab:table1}. All values are in the scale from 1 to 10 and represent how satisfied (10) or unsatisfied (1) they were.
+\begin{table}[H]
+\centering
+\begin{tabular}{l | c | c | c}
+Question & Person 1 & Person 2 & Person 3\\\hline
+Search for a famous movie & 8 & 9 & 9\\
+Search for a recent movie & 9 & 9 & 9\\
+Search for an old movie & 6 & 7 & 6\\
+Quality of the card display & 7 & 6.5 & 8\\
+Quality of the table display & 6 & 6 & 6\\
+Is all the information required displayed & 8 & 7 & 8\\
+General Score & 7 & 7 & 8
+\end{tabular}
+\label{tab:table1}
+\caption{Summary of the evaluation}
+\end{table}
+
+
+
+The positive impressions were as follows:
+\begin{itemize}
+\item Simple to use UI, almost too much
+\item Results are coherent with the search query
+\item The card view was nice to look at
+\item The system was responsive, never hanging too much in the query phase
+\end{itemize}
+
+
+
+\noindent On the other hand, there were a few remarks:
+\begin{itemize}
+\item The description text is not expandable on the results page\\
+This is due to a limitation in time, and could be interesting to implement.
+\item Sometimes, information is missing\\
+This is unfortunately due to a poor structure on the websites. Sometimes information is missing without reason, and therefore the parser cannot extract it
+\end{itemize}
+
+\section{Conclusion}
+In conclusion, I am quite happy with the tool. It performs as expected, and the results are quite accurate. If I were to do it again, I probably would spend more time in the crawling phase to really optimise this part, both in speed and accuracy. 
+
+\end{document}
