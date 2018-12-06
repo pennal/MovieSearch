@@ -87,7 +87,7 @@
         var cleanQueryComponents = cleanQuery.split(" ");
         var cleanQueryList = [];
         for (var i = 0; i < cleanQueryComponents.length; i++) {
-          if (!stopwords.includes(cleanQueryComponents[i].toLowerCase()) && cleanQueryComponents[i] !== "" && cleanQueryList.includes(cleanQueryComponents[i].toLowerCase())) {
+          if (!stopwords.includes(cleanQueryComponents[i].toLowerCase()) && cleanQueryComponents[i] !== "" && !cleanQueryList.includes(cleanQueryComponents[i].toLowerCase())) {
             cleanQueryList.push(cleanQueryComponents[i].toLowerCase());
           }
         }
